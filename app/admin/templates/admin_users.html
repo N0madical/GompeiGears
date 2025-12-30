@@ -1,0 +1,149 @@
+{% extends "admin_base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <h1 class="admin-title">Users</h1>
+    <div class="display-tab-inline text-center">
+        <span class="admin-tab admin-tab-main">Users</span>
+    </div>
+    <hr class="red-hr" >
+    <div class="w-100">
+        <form id="my_form" method ="POST" action="" class="d-flex flex-wrap align-items-center text-nowrap p-2">
+            {{ form.hidden_tag() }}
+            <span class="sort-span fw-bold me-3 mb-1">Filter by: </span>
+
+            {{ form.search(class="form-control me-5 w-25 my-1", placeholder="Search...") }}
+
+            <div class="d-flex align-items-center me-5 my-1">
+                {{ form.locked.label(id='banned_checkbox', class='form-check-label me-2') }}
+                {{ form.locked(class='form-check-input') }}
+            </div>
+
+            <div class="d-flex align-items-center me-5 my-1">
+                {{ form.is_admin.label(class='form-check-label me-2') }}
+                {{ form.is_admin(class='form-check-input') }}
+            </div>
+            {{ form.submit(class="btn btn-dark mt-1") }}
+        </form>
+        <div class="w-100 overflow-scroll">
+            <table id="users_table" class="admin-table text-nowrap">
+                <tr class="bg-wpi-grey">
+                    <th>User Name</th>
+                    <th>User Email</th>
+                    <th>Admin</th>
+                    <th>Banned</th>
+                    <th>Messages</th>
+                    <th></th>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+
+    <script>
+        let query;
+
+        document.getElementById("my_form").addEventListener("submit", event => {
+            event.preventDefault();// disable the default behavior when the form is submitted
+            build_table();
+        })
+
+        async function toggle_admin(my_url){
+            try {
+                if (!await areYouSure("Are you sure you want to change this user's admin status?")) {
+                    event.target.submit()
+                }
+                const response = await fetch(my_url, {
+                method: 'POST'});
+                build_table();
+            } catch(error) {
+                console.error(error.message);
+            }
+        }
+
+
+        async function toggle_banned(my_url) {
+            try {
+                if (!await areYouSure("Are you sure you want to change this user's banned status?")) {
+                    event.target.submit()
+                }
+                const response = await fetch(my_url, {
+                method: 'POST'});
+                build_table();
+            } catch(error) {
+                console.error(error.message);
+            }
+        }
+
+        async function clear_table(){
+            table = document.getElementById("users_table");
+            my_rows = document.getElementById("users_table").getElementsByClassName("my_table_row");
+            for (let i = my_rows.length; i > 0; i--){
+                table.deleteRow(i);
+            }
+        }
+
+        async function build_table(){
+            
+            table = document.getElementById("users_table");
+            search_field = document.getElementById("my_form").elements[1].value;
+            is_admin = document.getElementById("is_admin").checked;
+            is_banned = document.getElementById("locked").checked;
+            fetch('{{url_for("admin.filter_admin_users")}}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({'search': search_field,
+                    'admin': is_admin,
+                    'banned': is_banned
+                })
+            }).then(response => response.json())
+            .then(data => {query = data;
+                clear_table();
+                for (let i = 0; i < query["result"].length; i++) {
+                    let tr_elm = document.createElement("tr");
+                    tr_elm.style.vAlign = 'middle';
+                    tr_elm.classList.add("my_table_row")
+                    tr_elm.style.borderBottom = "solid 2px #A9B0B7";
+                    let td_name = document.createElement("td");
+                    td_name.innerHTML = query["result"][i].name;
+                    tr_elm.appendChild(td_name);
+                    let td_email = document.createElement("td");
+                    td_email.innerHTML = query["result"][i].email;
+                    tr_elm.appendChild(td_email);
+                    let td_admin = document.createElement("td");
+                    td_admin.innerHTML = `<button type="button" onClick="toggle_admin('/admin/users/toggle/admin?user_id=${query["result"][i].user_id}')" class="btn btn-outline-secondary">${query["result"][i].admin}</button>`;
+                    tr_elm.appendChild(td_admin);
+                    let td_banned = document.createElement("td");
+                    td_banned.innerHTML = `<button type="button" onClick="toggle_banned('/admin/users/toggle/banned?user_id=${query["result"][i].user_id}')" class="btn btn-outline-secondary">${query["result"][i].banned}</button>`;
+                    tr_elm.appendChild(td_banned);
+                    let td_messaging = document.createElement("td");
+                    if (query["result"][i].subscribed) {
+                        const btn = document.createElement("a")
+                        btn.className = "btn btn-dark unlink"
+                        btn.textContent = "Send Message"
+                        btn.href = "{{ url_for('admin.messaging') }}?r=" + query["result"][i].user_id
+                        td_messaging.appendChild(btn)
+                    } else {
+                        td_messaging.textContent = "Not subscribed"
+                    }
+                    tr_elm.appendChild(td_messaging)
+                    let td_btns = document.createElement("td");
+                    td_btns.innerHTML = `<a class='btn btn-dark' href='{{ url_for('admin.load_admin_rides') }}?q=${query["result"][i].email}'>Rides</a> <a class='btn btn-dark' href='{{ url_for('admin.load_admin_reports') }}?q=${query["result"][i].email}'>Reports</a>`
+                    tr_elm.appendChild(td_btns);
+
+                    table.appendChild(tr_elm);
+            }
+            });
+        }
+
+        const url = new URL(location.href)
+        if (url.searchParams.has("q")) {
+            document.getElementById("my_form").elements[1].value = url.searchParams.get("q")
+        }
+
+        build_table();
+        setInterval(build_table, 15000);
+    </script>
+{% endblock %}

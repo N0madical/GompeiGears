@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import '_form_field.html' as wtf%}
+
+{% block content %}
+    <div class="text-bg-light container-lg p-5">
+        <h1>Bike Reports</h1>
+        <p>If you have any urgent concerns, please <a href="tel:{{ fleet.contact_phone }}">call</a> or <a href="mailto:{{ fleet.contact_email }}">email</a> the system administrator.</p>
+        <div class="card p-2 m-2">
+            <p>Please fill all fields of the form</p>
+            <form action="{{url_for('main.create_report')}}" method="POST">
+                {{ form.hidden_tag() }}
+                {{wtf.form_field(form.bike_id)}}
+                {{wtf.form_field(form.category)}}
+                {{wtf.form_field(form.description)}}
+                {{wtf.form_field(form.submit)}}
+            </form>
+        </div>
+
+        
+    </div>
+<!-- 
+    {% block script %}
+        <script>
+            document.querySelectorAll("form").forEach(form => {
+                form.addEventListener("submit", e => {
+                    e.preventDefault();
+                    navigator.geolocation.getCurrentPosition(position => {
+                        e.target.elements["lat"].value = position.coords.latitude;
+                        e.target.elements["long"].value = position.coords.longitude;
+                        console.log(e.target)
+                        e.target.submit();
+                    }, () => {
+                        alert("error getting location")
+                    }, {
+                        enableHighAccuracy: true
+                    });
+                });
+            });
+        </script>
+    {% endblock %} -->
+
+{% endblock %}

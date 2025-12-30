@@ -1,0 +1,35 @@
+{% extends "admin_base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <h3>Fleet Settings</h3>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+
+        {{ wtf.form_field(form.user_agreement) }}
+        {{ wtf.form_field(form.contact_email) }}
+        {{ wtf.form_field(form.contact_phone) }}
+
+        {{ form.submit(class="btn btn-dark") }}
+    </form>
+    <br>
+    <hr class="bg-wpi-red admin-table-line opacity-100" >
+    <br>
+    <h3>Edit Stations</h3>
+    <table class="admin-table">
+        <tr class="bg-wpi-grey">
+            <th>Station ID</th>
+            <th>Station Name</th>
+            <th><a href="{{ url_for('admin.station_edit', id='new') }}" class="unlink btn btn-dark"><i class="bi bi-plus text-white"></i> New Station</a></th>
+        </tr>
+        {% for station in stations %}
+            <tr>
+                <td>{{ station.get_id() }}</td>
+                <td>{{ station.get_name() }}</td>
+                <!-- Once bikes page is implemented, add button here to show all bikes at this station -->
+                <td><a href="{{ url_for('admin.station_edit', id=station.get_id()) }}" class="unlink btn btn-dark"><i class="bi bi-pencil text-white"></i> Edit Station</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+
+{% endblock %}

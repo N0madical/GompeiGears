@@ -1,0 +1,100 @@
+{% extends "admin_base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+
+        {{ wtf.form_field(form.name) }}
+
+        <p>Drag the markers to position the station.</p>
+        <p>
+            <button class="btn btn-dark" id="panToStation"><i class="bi bi-compass text-white"></i> Pan to Station</button>
+            <button class="btn btn-dark" id="moveStation"><i class="bi bi-arrows-move text-white"></i> Move Station Here</button>
+        </p>
+        <div id="map" class="w-100 z-0" style="height: 30vw"></div>
+        <br>
+
+        <p>
+            {{ form.submit(class="btn btn-dark") }} {% if id != "new" %}<input type="submit" value="Delete Station" class="btn btn-danger" form="deleteForm">{% endif %}
+        </p>
+    </form>
+
+    <form action="{{ url_for('admin.station_delete', id=id) }}" method="post" id="deleteForm">
+        {{ dform.hidden_tag() }}
+    </form>
+
+    <script>
+        var map = L.map('map');
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }).addTo(map);
+
+        let pinIcon = L.icon({
+            iconUrl: "{{ url_for('static', filename='pins/pin.svg') }}",
+
+            iconSize:     [40, 50], // size of the icon
+            iconAnchor:   [20, 50], // point of the icon which will correspond to marker's location
+            popupAnchor:  [0, -50] // point from which the popup should open relative to the iconAnchor
+        });
+
+        var corners = [];
+        var markers = [];
+        for (var i = 1; i <= 4; i++) {
+            corners.push([
+                parseFloat(document.querySelector("#lat" + i).value),
+                parseFloat(document.querySelector("#long" + i).value)
+            ])
+            const marker = L.marker(corners[i - 1], {
+                draggable: true,
+                autopan: true,
+                icon: pinIcon
+            })
+
+            const markerId = i;
+            marker.on("drag", event => {
+                document.querySelector("#lat" + markerId).value = event.latlng.lat;
+                document.querySelector("#long" + markerId).value = event.latlng.lng;
+                corners[markerId - 1] = event.latlng;
+                polygon.setLatLngs(corners)
+            });
+
+            marker.addTo(map)
+            markers.push(marker)
+        }
+        map.setView(corners[0], 20);
+
+        var polygon = L.polygon(corners, {color: 'red'}).addTo(map)
+
+        document.querySelector("#panToStation").addEventListener("click", event => {
+            event.preventDefault();
+            map.setView(corners[0], 19);
+        });
+
+        document.querySelector("#moveStation").addEventListener("click", event => {
+            event.preventDefault();
+            const center = map.getCenter();
+            corners = [[center.lat - 0.00005, center.lng - 0.00005], [center.lat + 0.00005, center.lng - 0.00005], [center.lat + 0.00005, center.lng + 0.00005], [center.lat - 0.00005, center.lng + 0.00005]]
+
+            for (var i = 1; i <= 4; i++) {
+                document.querySelector("#lat" + i).value = corners[i - 1][0];
+                document.querySelector("#long" + i).value = corners[i - 1][1];
+                markers[i - 1].setLatLng(corners[i - 1])
+            }
+
+            polygon.setLatLngs(corners)
+        })
+
+        document.querySelector("#deleteForm").addEventListener("submit", async event => {
+            event.preventDefault();
+            if (await areYouSure("Are you sure you want to permanently delete this station?")) {
+                event.target.submit()
+            }
+        });
+    </script>
+{% endblock %}

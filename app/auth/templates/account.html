@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <div class="bg-wpi-red h-100 p-3">
+        <div class="bg-light rounded p-3">
+            <h1>{{ title }}</h1>
+            <h2>Welcome, {{ current_user.get_name() }}</h2>
+
+            <hr>
+
+            <p>WPI Name: {{ user.get('name') }}</p>
+
+            <p>Email: {{ user.get("preferred_username") }}</p>
+
+            <form action="{{ url_for('auth.update') }}" method="post" class="w-50">
+                {{ form.hidden_tag() }}
+
+                {{ wtf.form_field(form.preferred) }}
+                {{ wtf.form_field(form.phone) }}
+
+                {% if has_notification_keys %}
+                    <p>You are currently subscribed to receive notifications about your rides.</p>
+                    {{ wtf.form_field(form.unsubscribe_notifications) }}
+                {% endif %}
+
+                {{ wtf.form_field(form.submit) }}
+            </form>
+
+            <hr>
+
+            <a class="btn btn-danger" href="{{ url_for('auth.logout') }}">Logout</a>
+
+            <footer style="text-align: right">Logged in with WPI</footer>
+        </div>
+    </div>
+{% endblock %}

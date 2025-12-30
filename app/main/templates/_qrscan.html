@@ -1,0 +1,38 @@
+{% block content %}
+<!-- QR code scanning dialog -->
+<div class="bg-dark p-3 shadow-lg fixed-bottom start-50 rounded-top" id="scanBox">
+    <h1 class="text-center text-white">Scan</h1>
+    <button type="button" class="text-white btn btn-dark position-absolute end-0 top-0 m-3" onclick="closeScanBox()"><i class="bi bi-x-lg"></i></button>
+    <a href="javascript:activateCamera()"><div id="scannerFrame" class="rounded m-2 mt-4 overflow-hidden">
+        <div id="scanner" autoplay="true" class=""></div>
+        <div class="position-absolute top-50 start-50 translate-middle"><i class="bi bi-qr-code-scan text-white opacity-25" style="font-size: 15rem"></i></div>
+    </div></a>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+    const html5QrCode = new Html5Qrcode("scanner");
+    const config = { fps: 10, qrbox: { width: window.innerWidth, height: window.innerWidth } };
+
+    const onScanSuccess = (decodeText, decodeResult) => {
+        bikeNum = decodeText.replace("WPI", "");
+        window.location.href = `/rental/${bikeNum}`;
+    }
+
+    async function openScanBox() {
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+            document.getElementById("scanBox").style.transform = "translate(-50%, 0%)";
+        } catch (err) {
+            console.warn("Unable to start scanning:", err);
+            alert("Please allow camera access to scan QR codes.")
+        }
+    }
+
+    function closeScanBox() {
+        document.getElementById("scanBox").style.transform = "translate(-50%, 100%)";
+        setTimeout(() => {html5QrCode.stop();}, 500)
+    }
+</script>
+{% endblock %}

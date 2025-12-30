@@ -1,0 +1,77 @@
+{% extends "admin_base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <h3>Send Messages</h3>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+            <label class="form-label" for="recipients-search">Recipients</label>
+            <select id="recipients-search" class="form-select">
+                <option value="SELECT">Select recipients</option>
+                <option value="ALL">All members</option>
+                {% for option in form.recipients.iter_choices() %}
+                    <option value="{{ option[0] }}">{{ option[1] }}</option>
+                {% endfor %}
+            </select>
+            <p id="recipients-list"></p>
+        </div>
+
+        {{ wtf.form_field(form.subject) }}
+        {{ wtf.form_field(form.body) }}
+
+        {{ form.submit(class="btn btn-dark") }}
+    </form>
+
+    <script>
+        var recipients = new Set()
+
+        window.addEventListener("load", () => {
+            const url = new URL(location.href)
+            if (url.searchParams.has("r") && document.querySelector("option[value='" + url.searchParams.get("r") + "']")) {
+                addRecipient(url.searchParams.get("r"))
+            }
+
+            document.querySelector("#recipients-search").addEventListener("change", e => {
+                if (e.target.value === "SELECT" || recipients.has(e.target.value)) {  
+                    e.target.value = "SELECT"
+                    return;
+                }
+
+                if (e.target.value === "ALL") {
+                    recipients = new Set()
+                    document.querySelector("#recipients-list").innerHTML = "";
+                } else if (recipients.has("ALL")) {
+                    recipients.delete("ALL")
+                    document.querySelector("#recipient-ALL")?.remove()
+                }
+
+                addRecipient(e.target.value)
+                e.target.value = "SELECT"
+            })
+        })
+
+        function addRecipient(r) {
+            const recipient = document.createElement("label");
+            recipient.id = "recipient-" + r
+            recipient.className = "btn badge text-bg-dark p-2 m-1"
+            recipient.textContent = " " + document.querySelector("option[value='" + r + "']").textContent
+            const checkbox = document.createElement("input");
+            checkbox.setAttribute("type", "checkbox");
+            checkbox.checked = true;
+            checkbox.name = r === "ALL" ? "recipients_all" : "recipients"
+            checkbox.value = r
+            checkbox.className = "form-check-input align-text-bottom"
+            recipient.prepend(checkbox)
+            checkbox.addEventListener("change", e => {
+                if (!e.target.checked) {
+                    recipients.delete(e.target.value)
+                    e.target.parentElement.remove()
+                }
+            })
+            document.querySelector("#recipients-list").append(recipient)
+            recipients.add(r)
+        }
+    </script>
+{% endblock %}

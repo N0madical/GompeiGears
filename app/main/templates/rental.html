@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    {% if ride == None %}
+        <div class="modal fade" id="rentalModal" tabindex="-1" aria-labelledby="rentalModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <form class="modal-content" id="rentalForm">
+                    <div class="modal-header">
+                        <h1 class="modal-title fs-5" id="rentalModalLabel">Rent {{ bike.name }}</h1>
+                        <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        {{ rform.hidden_tag() }}
+
+                        {% if agreement %}
+                            <p>You must accept our user agreement in order to rent a bike.</p>
+                            <iframe src="{{ agreement }}" style="height: 70vh; width: 100%" class="p-3" credentialless referrerpolicy="no-referrer" loading="lazy"></iframe>
+                            {{ wtf.form_field(rform.signed_agreements) }}
+                        {% endif %}
+
+                        {% if has_notification_keys %}
+                            <p>You are subscribed to notifications for this ride. You can unsubscribe from your account page.</p>
+                        {% else %}
+                            <p>Sign up for reminder notifications during your ride.</p>
+                            <button id="notificationSubscribe" class="btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> Subscribe to Notifications</button>
+                            <p class="text-danger" id="notificationError"></p>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <span class="text-danger" id="rentalError" form="rentalForm"></span> <button form="rentalForm" class="btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> Start Rental</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+    <div class="container-lg p-5" {{ 'hidden' if ride == None else '' }} id="rentalStatusArea">
+        <h2>Currently Renting {{ bike.name }}</h2>
+        <p>Renting for <span id="rideTime"></span></p>
+        <br>
+        <hr class="bg-wpi-red admin-table-line opacity-100" >
+        <br>
+        <p {{ 'hidden' if not bike.locked else '' }} id="bikeIsLocked"><i class="bi bi-lock"></i> Bike is locked.</p>
+        <p {{ 'hidden' if bike.locked else '' }} id="bikeIsUnlocked"><i class="bi bi-unlock"></i> Bike is unlocked.</p>
+        <form id="setLockForm">
+            {{ lform.hidden_tag() }}
+
+            <button class="btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> <span>{{ "Unlock" if bike.locked else "Lock"}}</span></button> <span class="text-danger" id="setLockError" form="setLockForm"></span>
+        </form>
+        <br>
+        <hr class="bg-wpi-red admin-table-line opacity-100" >
+        <br>
+        <button class="btn btn-dark" id="endRentalBtn" data-bs-toggle="modal" data-bs-target="#rateModal" {{ 'disabled' if not bike.locked else '' }}>End Rental</button>
+        <p class="text-danger" {{ 'hidden' if bike.locked else '' }} id="bikeUnlockedWarning">You must lock your bike before returning it.</p>
+    </div>
+
+    <div class="modal fade" id="rateModal" tabindex="-1" aria-labelledby="rateModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form class="modal-content" id="endRentalForm">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="rateModalLabel">End Rental</h1>
+                    <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {{ eform.hidden_tag() }}
+                    
+                    <p class="form-label">How was your ride?</p>
+                    <p>
+                        <label class="form-check-label btn btn-success">
+                            <input type="radio" name="rating" value="positive" class="form-check-input">
+                            <i class="bi bi-hand-thumbs-up"></i>
+                        </label>
+
+                        <label class="form-check-label btn btn-danger">
+                            <input type="radio" name="rating" value="negative" class="form-check-input">
+                            <i class="bi bi-hand-thumbs-down"></i>
+                        </label>
+                    </p>
+                    {{ wtf.form_field(eform.report_issue) }}
+                </div>
+                <div class="modal-footer">
+                    <span class="text-danger" id="endRentalError" form="rateModal"></span> <button form="endRentalForm" class="btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> End Rental</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% block script %}
+        <script>
+            const vapidPublicKey = Uint8Array.from(atob("{{ vapid_public_key.replace('-', '+').replace('_', '/') if vapid_public_key else '' }}"), c => c.charCodeAt(0));
+            //{{ '\nvar rideStart = {}'.format(ride.ride_date.replace(tzinfo=utc).timestamp() * 1000) if ride else '\nvar rideStart = null;' }}
+            //{{ '\nvar locked = true' if bike.locked else '\nvar locked = false' }}
+            var registration;
+
+            async function injectGeolocation(form) {
+                return new Promise(r => {
+                    navigator.geolocation.getCurrentPosition(position => {
+                        form.elements["lat"].value = position.coords.latitude;
+                        form.elements["long"].value = position.coords.longitude;
+                        r(true);
+                    }, e => {
+                        form.querySelector(".text-danger[form]").textContent = "Failed to get location - " + (e.code === 1 ? "Permission denied" : (e.code === 3 ? "Location timed out" : "Location unavailable")) + "."
+                    }, {
+                        enableHighAccuracy: true
+                    });
+                })
+            }
+
+            window.addEventListener("load", async () => {
+                if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+                    document.querySelector("#notificationSubscribe").setAttribute("disabled", "disabled");
+                    document.querySelector("#notificationError").textContent = "Notifications are not supported in this browser."
+                }
+
+                registration = await navigator.serviceWorker.getRegistration("{{ url_for('static', filename='sw.js') }}");
+                if(!registration){
+                    registration = await navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}");
+                }
+
+                //{% if not has_notification_keys %}
+                document.querySelector("#notificationSubscribe").addEventListener("click", async e => {
+                    e.preventDefault();
+                    document.querySelector("#notificationError").textContent = ""
+                    document.querySelector("#notificationSubscribe").setAttribute("disabled", "disabled");
+                    document.querySelector("#notificationSubscribe .spinner-border").removeAttribute("hidden");
+
+                    var permission = Notification.permission;
+
+                    if(Notification.permission === "default"){
+                        permission = await Notification.requestPermission();
+                    }
+
+                    if (permission !== "granted") {
+                        document.querySelector("#notificationError").textContent = "Notification permission denied."
+                        document.querySelector("#notificationSubscribe").removeAttribute("disabled");
+                        document.querySelector("#notificationSubscribe .spinner-border").setAttribute("hidden", "hidden");
+                        return;
+                    }
+
+                    subscription = await registration.pushManager.getSubscription();
+                    if(!subscription){
+                        subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: vapidPublicKey
+                        });
+                    }
+
+                    subscription = subscription.toJSON()
+
+                    document.querySelector("#rentalForm").elements["notification_endpoint"].value = subscription.endpoint
+                    document.querySelector("#rentalForm").elements["notification_p256dh_key"].value = subscription.keys.p256dh
+                    document.querySelector("#rentalForm").elements["notification_auth_key"].value = subscription.keys.auth
+
+                    document.querySelector("#notificationError").textContent = "Subscribed successfully"
+                    document.querySelector("#notificationError").className = "text-success"
+                    document.querySelector("#notificationSubscribe .spinner-border").setAttribute("hidden", "hidden");
+                });
+                //{% endif %}
+
+                //{% if ride == None %}
+                const rentalModal = new bootstrap.Modal("#rentalModal");
+                rentalModal.show();
+
+                document.querySelector("#rentalModal").addEventListener("hide.bs.modal", () => {
+                    if (!rideStart) {
+                        location.href = "{{ url_for('main.home') }}"
+                    }
+                });
+
+                document.querySelector("#rentalForm").addEventListener("submit", async event => {
+                    event.preventDefault();
+                    event.target.querySelector("button[form] .spinner-border").removeAttribute("hidden");
+                    event.target.querySelector("button[form]").setAttribute("disabled", "disabled");
+                    if(await injectGeolocation(event.target)) {
+                        const resp = await fetch("{{ url_for('main.startride', bike_id=bike.id) }}", {
+                            method: "POST",
+                            body: new FormData(event.target)
+                        }).then(r => r.json()).catch(() => {});
+
+                        if (!resp) {
+                            document.querySelector("#rentalError").textContent = "Failed to connect, please check your internet connection."
+                        } else if (resp.redirect) {
+                            location.href = resp.redirect
+                        } else if (resp.message === "error-user-agreement") {
+                            document.querySelector("#rentalError").textContent = "You must agree to our user agreement to proceed."
+                        } else if (resp.message === "error-too-far-bike") {
+                            document.querySelector("#rentalError").textContent = "You are too far away from this bike."
+                        } else if (resp.message === "error-form-invalid") {
+                            document.querySelector("#rentalError").textContent = "Please ensure all fields are filled in."
+                        } else if (resp.message === "success") {
+                            document.querySelector("#rentalError").textContent = ""
+                            rideStart = resp.ride_date
+                            rentalModal.hide();
+                            document.querySelector("#rentalStatusArea").removeAttribute("hidden");
+                        }
+                    }
+
+                    event.target.querySelector("button[form] .spinner-border").setAttribute("hidden", "hidden");
+                    event.target.querySelector("button[form]").removeAttribute("disabled");
+                })
+                //{% endif %}
+
+                document.querySelector("#setLockForm").addEventListener("submit", async event => {
+                    event.preventDefault();
+                    event.target.querySelector(".spinner-border").removeAttribute("hidden");
+                    event.target.querySelector("button.btn").setAttribute("disabled", "disabled");
+                    event.target.elements["state"].value = locked ? "unlocked" : "locked"
+                    const resp = await fetch("{{ url_for('main.setlock', bike_id=bike.id) }}", {
+                        method: "POST",
+                        body: new FormData(event.target)
+                    }).then(r => r.json()).catch(() => {});
+
+                    if (!resp) {
+                        document.querySelector("#setLockError").textContent = "Failed to connect, please check your internet connection."
+                    } else if (resp.redirect) {
+                        location.href = resp.redirect
+                    } else if (resp.message === "error-form-invalid") {
+                        document.querySelector("#setLockError").textContent = "Please ensure all fields are filled in."
+                    } else if (resp.message === "success") {
+                        document.querySelector("#setLockError").textContent = ""
+                        locked = resp.lock_status
+                        if (locked) {
+                            document.querySelector("#bikeIsUnlocked").setAttribute("hidden", "hidden");
+                            document.querySelector("#bikeUnlockedWarning").setAttribute("hidden", "hidden");
+                            document.querySelector("#bikeIsLocked").removeAttribute("hidden");
+                            document.querySelector("#endRentalBtn").removeAttribute("disabled");
+                            document.querySelector("#setLockForm button span").textContent = "Unlock"
+                        } else {
+                            document.querySelector("#bikeIsLocked").setAttribute("hidden", "hidden");
+                            document.querySelector("#bikeUnlockedWarning").removeAttribute("hidden");
+                            document.querySelector("#bikeIsUnlocked").removeAttribute("hidden");
+                            document.querySelector("#endRentalBtn").setAttribute("disabled", "disabled");
+                            document.querySelector("#setLockForm button span").textContent = "Lock"
+                        }
+                    }
+
+                    event.target.querySelector(".spinner-border").setAttribute("hidden", "hidden");
+                    event.target.querySelector("button.btn").removeAttribute("disabled");
+                });
+
+                document.querySelector("#endRentalForm").addEventListener("submit", async event => {
+                    event.preventDefault();
+                    event.target.querySelector(".spinner-border").removeAttribute("hidden");
+                    event.target.querySelector("button.btn").setAttribute("disabled", "disabled");
+                    if(await injectGeolocation(event.target)) {
+                        const resp = await fetch("{{ url_for('main.endride', bike_id=bike.id) }}", {
+                            method: "POST",
+                            body: new FormData(event.target)
+                        }).then(r => r.json()).catch(() => {});
+
+                        if (!resp) {
+                            document.querySelector("#endRentalError").textContent = "Failed to connect, please check your internet connection."
+                        } else if (resp.redirect) {
+                            location.href = resp.redirect
+                        } else if (resp.message === "error-not-locked") {
+                            document.querySelector("#endRentalError").textContent = "Please lock the bike before returning it."
+                        } else if (resp.message === "error-too-far-station") {
+                            document.querySelector("#endRentalError").textContent = "You are not currently in a bike station."
+                        } else if (resp.message === "error-form-invalid") {
+                            document.querySelector("#endRentalError").textContent = "Please ensure all fields are filled in."
+                        }
+                    }
+
+                    event.target.querySelector(".spinner-border").setAttribute("hidden", "hidden");
+                    event.target.querySelector("button.btn").removeAttribute("disabled");
+                });
+
+                setInterval(() => {
+                    if (rideStart) {
+                        document.querySelector("#rideTime").textContent = new Date(Date.now() - rideStart).toUTCString().slice(17, 25)
+                    }
+                }, 1000);
+            });
+        </script>
+    {% endblock %}
+{% endblock %}

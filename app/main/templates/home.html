@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="h-100 overflow-hidden">
+        <!--Map Element-->
+        <div id="map" class="vw-100 h-100"></div>
+        <button style="height: 3rem" class="btn btn-dark w-75 fixed-bottom start-50 translate-middle w-75" onclick="openScanBox()">
+            Scan <i class="bi bi-qr-code-scan"></i>
+        </button>
+
+        {% include '_qrscan.html' %}
+    </div>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+    <script>
+        var map = L.map('map').setView([42.2736346, -71.8083757], 17);
+        let reportTypes = {'1' : "Brake", '2' : "App", '3' : "Tire",
+            '4' : "Lock", '5' : "Gear", '6' : "Frame", '7' : "Other"
+        }
+        let userPosMarker
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }).addTo(map);
+
+        // Optional user pin on map
+        const positionWatcher = navigator.geolocation.watchPosition(() => {
+            let locationIcon = L.icon({
+                iconUrl: '{{ url_for('static', filename='pins/location.svg') }}',
+                iconSize:     [30, 30], // size of the icon
+                iconAnchor:   [15, 15], // point of the icon which will correspond to marker's location
+            });
+            userPosMarker = L.marker([position.coords.latitude, position.coords.longitude], {icon:locationIcon, interactive: false}).addTo(map);
+        });
+
+        function defineDetails() {
+            fetch('{{ url_for('main.get_map_details') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server response:', data)
+
+                let iconSettings = {
+                    iconSize:     [40, 50], // size of the icon
+                    iconAnchor:   [20, 50], // point of the icon which will correspond to marker's location
+                    popupAnchor:  [0, -50] // point from which the popup should open relative to the iconAnchor
+                }
+
+                let freeIcon = L.icon({
+                    iconUrl: data.pin_red,
+                    ...iconSettings
+                }); let issueIcon = L.icon({
+                    iconUrl: data.pin_orange,
+                    ...iconSettings
+                });
+
+                for (let i = 0; i < data.bikes.length; i++) {
+                    L.marker(data.bikes[i].pos, {icon: data.bikes[i].status === '-1' ? freeIcon : issueIcon})
+                        .addTo(map)
+                        .bindPopup(`<div class="text-center">
+                            <h4>${data.bikes[i].name}</h4>
+                            <a class="btn btn-dark text-white" href='/rental/${data.bikes[i].id}'>Rent</a>
+                            ${ data.bikes[i].status !== '-1' ? `<p>${reportTypes[data.bikes[i].status]} issue</p>` : ``}
+                            </div>`)
+                }
+
+                for (let j = 0; j < data.stations.length; j++) {
+                    L.polygon(data.stations[j].pos, {color: 'red'})
+                        .addTo(map)
+                        .bindPopup(`<div class="text-center"><h5>${data.stations[j].name} Station</h5></div>`)
+                }
+            })
+            .catch(error => {
+                console.error('Error getting map details from server:', error);
+            });
+        }
+
+        defineDetails()
+    </script>
+{% endblock %}

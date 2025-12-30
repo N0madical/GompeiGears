@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="d-flex justify-content-center align-items-center text-center bg-wpi-red h-100">
+        <div style="transform: translateY(-35%);">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <img class="img-fluid col-10" src="{{ url_for('static', filename='images/banner.png') }}" alt="Gompei's Gears">
+                </div>
+            </div>
+
+            <h4 class="text-white mt-5">Get Started:</h4>
+            <a class="btn btn-light bg-white me-1" role="button" href="{{ url_for("auth.account") }}">Log In with WPI</a>
+            <a class="btn btn-light bg-white" role="button" href="{{ url_for("auth.autologin") }}">Testing: Autologin w/ Admin</a>
+        </div>
+    </div>
+{% endblock %}

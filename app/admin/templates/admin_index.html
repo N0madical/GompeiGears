@@ -1,0 +1,254 @@
+{% extends "admin_base.html" %}
+{% import "_form_field.html" as wtf %}
+
+{% block content %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+    <div class="display-sort-inline" style="width:100%">
+        <div class="split-contents" style="width:58%">
+             
+            <h1 class="admin-title">Gompei's Gears</h1>
+            <div class="display-tab-inline text-center">
+                <button id="ongoing_button" onClick="swap_to_ongoing()" class="admin-tab admin-tab-main">Ongoing Rides</button>
+                <button id="comp_button" onClick="swap_to_comp()" class="admin-tab" style="transform: translateX(-15px)">Completed Rides</button>
+            </div>
+                
+        </div>
+        <div style="width:40%"> 
+            <div id="adminStats" class="me-2 mb-3 rounded shadow p-3 text-center bg-wpi-grey" style="width: max-content; max-width: 100%">
+                <span class="fw-bold">Bike Statistics:</span><br>
+                <div class="d-flex flex-wrap justify-content-center">
+                    <div class="shadow-sm m-2 p-2 bg-light rounded"><h1 id="rides_month" class="m-0"></h1><p>Rides This Month</p></div>
+                    <div class="shadow-sm m-2 p-2 bg-light rounded"><h1 id="num_reports" class="m-0"></h1><p>Maintenance Requests</p></div>
+                    <div class="shadow-sm m-2 p-2 bg-light rounded"><h1 id="bikes_out" class="m-0"></h1><p>Bikes Out of Service</p></div>
+                </div>
+{#                reports this month: <span id="reports_month"></span><br>#}
+{#                Broken Bikes: <span id="broken_bikes"></span>#}
+            </div>
+        </div>
+    </div>
+    <hr class="red-hr" >
+    
+    <div class="w-100">
+        <form id="my_form" method ="POST" action="" class="d-flex flex-wrap align-items-center text-nowrap p-2">
+            {{ form.hidden_tag() }}
+            <span class="sort-span fw-bold me-3 mb-1">Filter by: </span>
+
+            {{ form.search(class="form-control me-5 w-25 my-1", placeholder="Search...") }}
+
+            <div class="d-flex align-items-center me-5 my-1">
+                {{ form.date.label(class='form-label me-2 mb-0') }}
+                {{ form.date(class='form-select') }}
+            </div>
+
+            <div class="d-flex align-items-center me-5 my-1">
+                {{ form.duration.label(class='form-check-label me-2') }}
+                {{ form.duration(class='form-check-input') }}
+            </div>
+
+            {{ form.submit(class="btn btn-dark mt-1") }}
+        </form>
+        <div class="overflow-scroll w-100">
+            <table id="admin_table" class="admin-table">
+                <tr class="text-nowrap bg-wpi-grey" style="vertical-align: middle; border-bottom: solid 2px #A9B0B7">
+                    <td>Name</td>
+                    <td>Email</td>
+                    <td>Bike</td>
+                    <td>Duration</td>
+                    <td>Route</td>
+                    <td>Start Time</td>
+                    <td class="ongoing-hidden">Rating</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="routeModal" tabindex="-1" aria-labelledby="routeModalLabel">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="rentalModalLabel">Ride Path</h1>
+                    <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="map" class="ratio ratio-1x1 rounded mb-3"></div>
+                    <h4>Distance: <span id="distanceLabel"></span> mi</h4>
+                </div>
+                <div class="modal-footer">
+                    <p id="pathLabel">_'s ride on _ at _</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <template id="ride_row_template">
+        <tr class="data-row text-nowrap" style="vertical-align: middle; border-bottom: solid 2px #A9B0B7">
+            <td class="user_name"></td>
+            <td><a class="user_email"></a></td>
+            <td><a class="bike"></a></td>
+            <td class="duration"></td>
+            <td><button class="route btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#routeModal">Open Map</button></td>
+            <td class="timestamp"></td>
+            <td class="ongoing-hidden"><i class="rating i"></i></td>
+        </tr>
+    </template>
+
+
+    <script>
+        let active_page = 0;
+        let query;
+        let map = L.map('map').setView([42.2736346, -71.8083757], 17);
+        let routePoints = L.layerGroup().addTo(map);
+        let mapBounds = [[42.277055, -71.810009],[42.271895, -71.804452]]
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }).addTo(map);
+
+        document.getElementById("my_form").addEventListener("submit", event => {
+            event.preventDefault();// disable the default behavior when the form is submitted
+            build_table();
+        })
+
+        async function swap_to_ongoing(){
+            document.getElementById("ongoing_button").classList.add("admin-tab-main");
+            document.getElementById("comp_button").classList.remove("admin-tab-main");
+            active_page = 0;
+            build_table();
+        }
+
+        async function swap_to_comp(){
+            document.getElementById("comp_button").classList.add("admin-tab-main");
+            document.getElementById("ongoing_button").classList.remove("admin-tab-main");
+            active_page = 1;
+            build_table();
+        }
+
+        async function clear_table(){
+            let my_rows = document.querySelectorAll('.data-row');
+            my_rows.forEach(row => row.remove());
+        }
+
+        async function build_table(){
+            table = document.getElementById("admin_table");
+            template = document.getElementById("ride_row_template");
+            search_field = document.getElementById("my_form").elements[1].value;
+            fetch('{{url_for("admin.filter_admin_rides")}}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({'search': search_field,
+                    'completed': active_page,
+                    'date': document.getElementById("date").value,
+                    'overtime': document.getElementById("duration").checked
+                })
+            }).then(response => response.json())
+            .then(data => {query = data;
+                // Clear existing table data
+                clear_table();
+
+                // Add table data
+                for (let i = 0; i < query["result"].length; i++) {
+                    // Set default data fields
+                    let clone = template.content.cloneNode(true);
+                    const keys = Object.keys(query["result"][i]);
+                    for(let j = 0; j < keys.length; j++){
+                        let box = clone.querySelector("." + keys[j])
+                        if (box != null) {
+                            box.innerHTML = query["result"][i][keys[j]];
+                        }
+                    }
+
+                    // Set links and special data
+                    clone.querySelector(".user_email").href = "{{ url_for('admin.load_admin_users') }}?q=" + query["result"][i]["user_email"];
+                    clone.querySelector(".bike").href = "{{ url_for('admin.assets') }}#" + query["result"][i]["bike"];
+                    clone.querySelector(".rating").classList.add(query["result"][i]["pos_rating"] ? "bi-hand-thumbs-up" : "bi-hand-thumbs-down");
+                    clone.querySelector(".route").onclick = function() { load_path(query["result"][i]["bike_id"], query["result"][i]["start_time"], query["result"][i]["end_time"], query["result"][i]["user_name"], query["result"][i]["timestamp"]); };
+
+                    //Append clone to database
+                    table.appendChild(clone);
+                }
+
+                if (active_page === 1) {document.querySelectorAll(".ongoing-hidden").forEach(el => el.classList.remove("d-none"))}
+                else {document.querySelectorAll(".ongoing-hidden").forEach(el => el.classList.add("d-none"))}
+
+                // add page data
+                document.getElementById("num_reports").innerHTML = query["num_reports"];
+                document.getElementById("rides_month").innerHTML = query["rides_month"];
+                document.getElementById("bikes_out").innerHTML = query["bikes_out"];
+                flask_moment_render_all()
+            });
+        }
+
+        async function load_path(bikeId, startTime, endTime, name, start_time){
+            fetch('{{url_for("admin.get_ride_path")}}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    'bike_id': String(bikeId),
+                    'start_time': String(startTime),
+                    'end_time': String(endTime),
+                })
+            }).then(response => response.json())
+            .then(data => {
+                console.log("times:", String(startTime), String(endTime))
+                routePoints.clearLayers();
+                document.getElementById("distanceLabel").textContent = "0"
+                document.getElementById("pathLabel").innerHTML = name + "'s WPI" + bikeId  + " ride on " + start_time;
+
+                if (data.path.length >= 1) {
+                    console.info("Getting map for bike", bikeId)
+                    posIcon = L.icon({
+                        iconUrl: data.location_icon,
+                        iconSize: [30, 30], // size of the icon
+                        iconAnchor: [15, 15], // point of the icon which will correspond to marker's location
+                    });
+                    posIconSmall = L.icon({
+                        iconUrl: data.location_icon,
+                        iconSize: [16, 16], // size of the icon
+                        iconAnchor: [8, 8], // point of the icon which will correspond to marker's location
+                    });
+
+                    for (let i = 0; i < data.path.length; i++) {
+                        let icon = i === data.path.length - 1 ? posIcon : posIconSmall;
+                        L.marker(data.path[i], {icon: icon, interactive: false}).addTo(routePoints);
+                    }
+
+                    // Add the path and zoom to it
+                    let route = L.polyline(data.path, {color: 'red'}).addTo(routePoints);
+                    mapBounds = route.getBounds()
+                    map.fitBounds(mapBounds);
+
+                    document.getElementById("distanceLabel").textContent = data.distance;
+                } else {
+                    console.info("No path found for bike", bikeId)
+                }
+            });
+        }
+
+        document.getElementById('routeModal').addEventListener('shown.bs.modal', function () {
+            map.invalidateSize();
+            map.fitBounds(mapBounds);
+        });
+
+        const url = new URL(location.href)
+        if (url.searchParams.has("q")) {
+            document.getElementById("my_form").elements[1].value = url.searchParams.get("q")
+        }
+
+        if (url.searchParams.has("p") && url.searchParams.get("p") === "0") {
+            swap_to_ongoing();
+        } else {
+            build_table();
+        }
+        setInterval(build_table, 15000);
+    </script>
+{% endblock %}

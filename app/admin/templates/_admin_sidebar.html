@@ -1,0 +1,35 @@
+{% block content %}
+    <!-- Sidebar for admin page -->
+    <div class="p-3 h-100" id="adminSidebar">
+        <div class="be-3" style="width: max-content;">
+            <hr class="text-white">
+
+            <!-- Nav elements -->
+            <ul class="nav nav-pills flex-column fs-5 pe-2">
+                {% if pages %}
+                    {% for page in pages[1] %}
+                        <li class="hoverable rounded mb-2"><a href="{{ url_for(page.url) }}" class="d-flex flex-nowrap
+                                {% if url_for(page.url) in request.path %} current {% endif %}
+                                nav-link link-dark overflow-hidden">
+                            <i class="bi {{ page.icon }} me-3 text-light"></i>
+                            <p class="align-self-center m-0 text-nowrap text-white">{{ page.name }}</p>
+                        </a></li>
+                    {% endfor %}
+                {% endif %}
+            </ul>
+        <hr class="text-white mt-2">
+            <ul class="nav nav-pills flex-column fs-5 pe-2">
+                {% if pages %}
+                    {% for page in pages[0] %}
+                        <li class="hoverable rounded mb-2"><a href="{{ url_for(page.url) }}" class="d-flex flex-nowrap
+                                {% if url_for(page.url) in request.path %} current {% endif %}
+                                nav-link link-dark overflow-hidden">
+                            <i class="bi {{ page.icon }} me-3 text-light"></i>
+                            <p class="align-self-center m-0 text-nowrap text-white">{{ page.name }}</p>
+                        </a></li>
+                    {% endfor %}
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+{% endblock %}

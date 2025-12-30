@@ -1,0 +1,284 @@
+{% extends "admin_base.html" %}
+
+{% block content %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+    <style>
+    </style>
+    <div>
+        <!--Map Element-->
+        <h1 class="p-2 position-relative">Assets</h1>
+        <div class="w-100 z-0 d-flex parent-container position-relative" style="height: 80vh">
+            <div id="map" class="w-100 z-0"></div>
+            <div id="bikeList" class="z-3 position-absolute end-0 top-0 m-3">
+                <input id="bikeSearch" class="form-control mb-2" type="search" placeholder="Search" aria-label="Search">
+                <div id="bikes" class="overflow-scroll"></div>
+            </div>
+        </div>
+        <button style="height: 3rem;" class="btn btn-dark mt-2" onclick="openScanBox()">
+            Scan <i class="bi bi-qr-code-scan"></i>
+        </button>
+
+        <!-- QR code scanning dialog -->
+        {% include '_qrscan.html' %}
+    </div>
+
+    <template id="bikeTemplate">
+        <div class="bg-light shadow-sm rounded p-3 mb-2">
+            <h3 class="bikeName">WPI100</h3>
+            <p class="bikeStatus mb-0"><span></span> - <span></span></p>
+            <p class="bikeDate">Last seen:</p>
+            <p class="bikeIssue"></p>
+            <div>
+                <a class="bikeRides btn btn-dark" href="{{ url_for('admin.load_admin_rides') }}">Rides</a>
+                <a class="bikeReports btn btn-dark" href="#">Reports</a>
+            </div>
+            <div class="pt-2">
+                <form class="setLockForm" style="display: inline">
+                    {{ lform.hidden_tag() }}
+                    <button class="setLockBtn btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> <span>Unlock</span></button>
+                </form>
+                <form class="endRentalForm" style="display: inline" hidden>
+                    {{ eform.hidden_tag() }}
+                    <input type="hidden" name="rating" value="negative">
+                    <button class="setLockBtn btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> End Rental</button>
+                </form>
+                <button class="setAvailabilityBtn btn btn-dark"><i class="spinner-border spinner-border-sm" hidden></i> Make Unavailable</button>
+                <button class="showMapBtn btn btn-dark">Locate</button>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        let map = L.map('map').setView([42.2736346, -71.8083757], 17);
+        let reportTypes = {'1' : "Brake", '2' : "App", '3' : "Tire",
+            '4' : "Lock", '5' : "Gear", '6' : "Frame", '7' : "Other"
+        }
+
+        let freeIcon, takenIcon, issueIcon, unavailableIcon
+        let bikeCache = [];
+        let filter = location.hash.slice(1);
+        let searchedBike = "";
+
+        // Initiate map
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }).addTo(map);
+
+        // Querying the database to get bikes and stations, then cacheing bikes for dynamic display
+        function defineDetails() {
+            fetch('{{ url_for("admin.get_map_details") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server response:', data)
+
+                let iconSettings = {
+                    iconSize:     [40, 50], // size of the icon
+                    iconAnchor:   [20, 50], // point of the icon which will correspond to marker's location
+                    popupAnchor:  [0, -50] // point from which the popup should open relative to the iconAnchor
+                }
+
+                freeIcon = L.icon({
+                    iconUrl: data.pin_red,
+                    ...iconSettings
+                }); takenIcon = L.icon({
+                    iconUrl: data.pin_white,
+                    ...iconSettings
+                }); issueIcon = L.icon({
+                    iconUrl: data.pin_orange,
+                    ...iconSettings
+                }); unavailableIcon = L.icon({
+                    iconUrl: data.pin_gray,
+                    ...iconSettings
+                });
+
+                for (let i = 0; i < data.bikes.length; i++) {
+                    const bikeIcon = data.bikes[i].station == null ? takenIcon :
+                        data.bikes[i].status !== "-1" ? issueIcon :
+                            data.bikes[i].avaliable ? freeIcon : unavailableIcon;
+                    let bike = L.marker(data.bikes[i].pos, {icon: bikeIcon})
+                        .addTo(map)
+                        .bindPopup(`<div class="text-center">
+                            <h4>${data.bikes[i].name}</h4>
+                            <a class="btn btn-dark text-white" href='#${data.bikes[i].id}'>Show</a>
+                            ${ data.bikes[i].status !== '-1' ? `<p>${reportTypes[data.bikes[i].status]} issue</p>` : ``}
+                            </div>`)
+                    bikeCache.push([data.bikes[i], bike])
+                }
+
+                for (let j = 0; j < data.stations.length; j++) {
+                    let station = L.polygon(data.stations[j].pos, {color: 'red'}).addTo(map)
+                }
+
+                updateBikeList();
+
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        window.addEventListener("hashchange", () => {
+            filter = location.hash.slice(1)
+            updateBikeList();
+        });
+
+        // Dynamically update scrollable bike div list based on variables
+        function updateBikeList() {
+            const bikebox = document.querySelector("#bikes");
+            const template = document.querySelector("#bikeTemplate");
+
+            bikebox.innerHTML = "";
+            searchedBike = ""
+
+            for (let k = 0; k < bikeCache.length; k++) {
+                if(filter === "" || bikeCache[k][0].name.toLowerCase().includes(filter.toLowerCase())) {
+                    if(map.getBounds().contains(bikeCache[k][1].getLatLng())) {
+                        const bikeInfo = bikeCache[k][0]
+                        const clone = template.content.cloneNode(true);
+                        clone.querySelector(".bikeName").textContent = bikeInfo.name;
+                        const lockedStatus = bikeInfo.locked ? "Locked" : "Unlocked";
+                        clone.querySelector(".setLockBtn span").textContent = bikeInfo.locked ? "Unlock" : "Lock"
+                        const availableStatus = bikeInfo.avaliable ? (bikeInfo.station == null ? "In Use" : "Available") : "Unavailable";
+                        if (bikeInfo.station === null) {
+                            clone.querySelector(".endRentalForm").removeAttribute("hidden");
+                        }
+                        clone.querySelector(".bikeStatus").children[0].textContent = lockedStatus;
+                        clone.querySelector(".bikeStatus").children[1].textContent = availableStatus;
+                        clone.querySelector(".bikeDate").textContent = "Last seen: " + String(bikeInfo.lastseen);
+                        clone.querySelector(".bikeRides").href = "{{ url_for('admin.load_admin_rides') }}?q=" + bikeInfo.name
+                        clone.querySelector(".bikeReports").href = "{{ url_for('admin.load_admin_reports') }}?q=" + bikeInfo.name
+                        clone.querySelector(".bikeIssue").textContent = bikeInfo.status !== '-1' ? `!> ${reportTypes[bikeInfo.status]} issue` : ``;
+                        clone.querySelector(".setLockForm").addEventListener("submit", async event => {
+                            event.preventDefault();
+
+                            if (bikeInfo.available) {
+                                if (!await areYouSure("Are you sure you want to modify the lock status of a bike while it is in use?")) {
+                                    return;
+                                }
+                            }
+
+                            {# Handling Bike Lock/Unlock #}
+                            event.target.querySelector(".spinner-border").removeAttribute("hidden");
+                            event.target.setAttribute("disabled", "disabled");
+                            event.target.elements["state"].value = event.target.querySelector(".setLockBtn span").textContent === "Unlock" ? "unlocked" : "locked"
+                            const resp = await fetch("{{ url_for('main.setlock', bike_id=-1) }}".replace("-1", bikeInfo.id), {
+                                method: "POST",
+                                body: new FormData(event.target)
+                            }).then(r => r.json()).catch(() => {});
+
+                            if (resp && resp.message === "success") {
+                                locked = resp.lock_status
+                                bikeInfo.locked = locked
+                                if (locked) {
+                                    event.target.parentElement.parentElement.querySelector(".bikeStatus").children[0].textContent = "Locked"
+                                    event.target.querySelector(".setLockBtn span").textContent = "Unlock"
+                                } else {
+                                    event.target.parentElement.parentElement.querySelector(".bikeStatus").children[0].textContent = "Unlocked"
+                                    event.target.querySelector(".setLockBtn span").textContent = "Lock"
+                                }
+                            }
+
+                            event.target.querySelector(".spinner-border").setAttribute("hidden", "hidden");
+                            event.target.querySelector("button.btn").removeAttribute("disabled");
+                        });
+                        clone.querySelector(".endRentalForm").addEventListener("submit", async event => {
+                            event.preventDefault();
+
+                            if (!await areYouSure("Are you sure you want to force end this rental?")) {
+                                return;
+                            }
+
+                            event.target.querySelector(".spinner-border").removeAttribute("hidden");
+                            event.target.setAttribute("disabled", "disabled");
+                            const resp = await fetch("{{ url_for('main.endride', bike_id=-1) }}".replace("-1", bikeInfo.id), {
+                                method: "POST",
+                                body: new FormData(event.target)
+                            }).then(r => r.json()).catch(() => {});
+
+                            if (resp && resp.message === "success") {
+                                event.target.parentElement.parentElement.querySelector(".bikeStatus").children[1].textContent = "Available"
+                                event.target.parentElement.parentElement.querySelector(".setAvailabilityBtn").childNodes[1].textContent = ' Make Unavailable'
+                                bikeCache[k][1].setIcon(freeIcon)
+                                bikeInfo.available = true
+                                event.target.setAttribute("hidden", "hidden")
+                            }
+
+                            event.target.querySelector(".spinner-border").setAttribute("hidden", "hidden");
+                            event.target.querySelector("button.btn").removeAttribute("disabled");
+                        });
+                        clone.querySelector(".showMapBtn").addEventListener("click", () => {
+                            filter = bikeInfo.name
+                            updateBikeList()
+                        });
+                        clone.querySelector(".setAvailabilityBtn").childNodes[1].textContent = bikeInfo.available ? ' Make Unavailable' : ' Make Available'
+                        clone.querySelector(".setAvailabilityBtn").addEventListener("click", async event => {
+                            event.preventDefault();
+
+                            if (!await areYouSure("Are you sure you want to change this bike's availability?")) {
+                                return;
+                            }
+
+                            event.target.querySelector(".spinner-border").removeAttribute("hidden");
+                            event.target.setAttribute("disabled", "disabled");
+                            const resp = await fetch("{{ url_for('admin.report_toggle_bike_availability') }}?bike_id=" + bikeInfo.id, {
+                                method: "POST"
+                            }).then(r => r.json()).catch(() => {});
+
+                            if (resp && resp.message === "success") {
+                                event.target.parentElement.parentElement.querySelector(".bikeStatus").children[1].textContent = resp.available ? "Available" : "Unavailable"
+                                event.target.childNodes[1].textContent = resp.available ? " Make Unavailable" : " Make Available"
+                                bikeCache[k][1].setIcon(resp.available ? freeIcon : takenIcon)
+                                bikeInfo.available = resp.available
+                            }
+
+                            event.target.querySelector(".spinner-border").setAttribute("hidden", "hidden");
+                            event.target.removeAttribute("disabled");
+                        })
+
+                        bikebox.appendChild(clone);
+                    }
+                    searchedBike = bikeCache[k][1]
+                }
+
+            }
+
+            if (searchedBike !== "" && filter !== "") {
+                map.flyTo(searchedBike.getLatLng(), 20);
+            }
+        }
+
+        // When the user zooms or pans the map, update the bike list
+        map.on('zoomend dragend', function() {
+            filter = ""
+            updateBikeList()
+        });
+
+        // When the user searches, update the bike list
+        function bikeSearch() {
+            filter = document.querySelector("#bikeSearch").value;
+            updateBikeList();
+        }
+        document.querySelector("#bikeSearch").addEventListener("keyup", bikeSearch);
+
+        // Get lat and lon of a click
+        function onMapClick(e) {
+            alert("You clicked the map at " + e.latlng);
+         }
+
+        map.on('click', onMapClick);
+
+        defineDetails();
+    </script>
+{% endblock %}

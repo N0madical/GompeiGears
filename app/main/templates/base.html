@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="html">
+    <head id="head">
+        <meta name="theme-color" content="#39ff14"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% if title %}
+          <title>{{ title }} - Gompei's Gears </title>
+        {% else %}
+          <title> Gompei's Gears App </title>
+        {% endif %}
+        <link rel="manifest" href="/manifest.json" />
+
+        <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/icon512.png') }}">
+
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+        <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+        <script>
+            eruda.init();
+            eruda.scale(1);
+        </script>
+    </head>
+
+    <body class="bg-light">
+        <table style="height: 100vh; width: 100vw;">
+            <tr class="h-auto shadow z-3" style="height: max-content">
+                <td class="">
+                     <!-- Navbar -->
+                    <div class="bg-light p-3 d-flex">
+                        <button type="button" class="btn shadow bg-dark" data-bs-toggle="offcanvas" href="#sidebar" role="button" aria-controls="sidebar">
+                            <i class="bi bi-list text-white fs-4 lh-1"></i>
+                        </button>
+                        <img src="{{ url_for("static", filename="images/icon512.png") }}"  alt="Logo" class="ms-auto me-auto" style="width: 3rem; height: 3rem">
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="p-0 b-0 z-3">
+                    <!-- Flash container -->
+                    {% include '_flash.html' %}
+                </td>
+            </tr>
+            <tr>
+                <td class="h-100 p-0">
+                    <!-- Page contents -->
+                    {% block content %} {% endblock %}
+                </td>
+            </tr>
+        </table>
+
+        {% include '_sidebar.html' %}
+    </body>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+</html>

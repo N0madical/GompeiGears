@@ -1,0 +1,41 @@
+{% block content %}
+    <!-- Sidebar -->
+    <div class="offcanvas offcanvas-start bg-wpi-grey shadow-lg p-2 overflow-scroll" style="width: 18rem" id="sidebar">
+        <div class="d-flex offcanvas-header">
+            <a class="unlink d-flex hoverable rounded pt-2 me-3" href="{{ url_for("main.home") }}">
+                <img src="{{ url_for("static", filename="images/icon512.png") }}"  alt="" class="me-3" style="width: 3rem; height: 3rem">
+                <h4>Gompei's Gears</h4>
+            </a>
+            <button type="button" class="btn-close hoverable rounded" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+
+        <hr>
+
+        <!-- Nav elements -->
+        {% if pages %}
+        <ul class="nav nav-pills flex-column fs-5">
+                {% for page in pages[0] %}
+                    <li class="hoverable rounded mb-2"><a href="{{ url_for(page.url) }}" class="d-flex flex-nowrap
+                            {% if url_for(page.url) in request.path %} bg-light {% endif %}
+                            nav-link link-dark overflow-hidden">
+                        <i class="bi {{ page.icon }} me-3"></i>
+                        <p class="align-self-center m-0">{{ page.name }}</p>
+                    </a></li>
+                {% endfor %}
+        </ul>
+        {% endif %}
+        {% if pages and pages[1] %}
+            <hr>
+            <ul class="nav nav-pills flex-column fs-5">
+            {% for page in pages[1] %}
+                <li class="hoverable rounded mb-2"><a href="{{ url_for(page.url) }}" class="d-flex flex-nowrap
+                        {% if url_for(page.url) in request.path %} bg-light {% endif %}
+                        nav-link link-dark overflow-hidden">
+                    <i class="bi {{ page.icon }} me-3"></i>
+                    <p class="align-self-center m-0">{{ page.name }}</p>
+                </a></li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endblock %}

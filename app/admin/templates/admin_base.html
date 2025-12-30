@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="html">
+    <head id="head">
+        <meta name="theme-color" content="#39ff14"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% if title %}
+          <title>{{ title }} - Gompei's Gears Admin</title>
+        {% else %}
+          <title> Gompei's Gears App </title>
+        {% endif %}
+        <link rel="manifest" href="manifest.json" />
+
+        <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/icon512.png') }}">
+
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+        {{moment.include_moment()}}
+    </head>
+
+    <body class="bg-wpi-red">
+        <div id="adminNavBar" class="navbar navbar-dark bg-light shadow-lg p-3 justify-content-start">
+            <button id="mobileNavButton" type="button" class="d-none btn shadow bg-dark me-3" data-bs-toggle="offcanvas" href="#sidebar" role="button" aria-controls="sidebar">
+                <i class="bi bi-list text-white fs-4 lh-1"></i>
+            </button>
+            <a href="{{ url_for('admin.index') }}" class="unlink d-flex">
+                <img src="{{ url_for("static", filename="images/icon512.png") }}"  alt="" class="me-3" style="width: 3rem; height: 3rem">
+                <h3 class="align-self-center me-3">Gompei's Gears Admin</h3>
+            </a>
+        </div>
+
+        <div class="d-flex">
+            {% include '_admin_sidebar.html' %}
+
+            <div class="w-100 h-100 p-3 m-3 ms-2 rounded bg-light overflow-scroll" style="height: max-content;">
+                <!-- Flash container -->
+                {% include '_flash.html' %}
+
+                <!-- Main content -->
+                {% block content %} {% endblock %}
+            </div>
+
+            <div class="modal fade" id="areYouSure" tabindex="-1" aria-labelledby="areYouSureLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5" id="areYouSureLabel">Are you sure?</h1>
+                        </div>
+                        <div class="modal-body"></div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" id="areYouSureCancel">Cancel</button>
+                            <button class="btn btn-primary" id="areYouSureOkay">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% include '_sidebar.html' %}
+    </body>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <script>
+        const areYouSureModal = new bootstrap.Modal("#areYouSure", {
+            backdrop: "static",
+            keyboard: false
+        });
+
+        async function areYouSure(message) {
+            document.querySelector("#areYouSure .modal-body").textContent = message;
+            await areYouSureModal.show();
+            return new Promise(r => {
+                document.querySelector("#areYouSureOkay").addEventListener("click", () => {
+                    r(true);
+                    areYouSureModal.hide();
+                });
+                document.querySelector("#areYouSureCancel").addEventListener("click", () => {
+                    r(false);
+                    areYouSureModal.hide();
+                });
+            });
+        }
+    </script>
+</html>

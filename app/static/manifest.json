@@ -1,0 +1,27 @@
+{
+    "lang": "en-us",
+    "name": "Gompei's Gears Bike Rental",
+    "short_name": "Gompei's Gears",
+    "description": "For WPI's free rental needs!",
+    "start_url": "/",
+    "background_color": "#0D1017",
+    "theme_color": "#0D1017",
+    "orientation": "any",
+    "display": "standalone",
+    "icons": [
+        {
+            "src": "static/images/appicon240.png",
+            "type": "image/png",
+            "sizes": "240x240"
+        },
+        {
+            "src": "static/images/icon512.png",
+            "type": "image/png",
+            "sizes": "512x512"
+        },
+        {
+            "src": "static/images/app-icon.svg",
+            "sizes": "240x240"
+        }
+    ]
+}
